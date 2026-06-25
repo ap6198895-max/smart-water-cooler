@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AquaPredict — Live Dashboard</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg:        #0a0f1a;
+      --bg-card:   #0d1b2a;
+      --bg-dark:   #080d17;
+      --border:    #1e3a5f;
+      --accent:    #3b82f6;
+      --accent-bg: rgba(30,120,255,0.1);
+      --accent-br: rgba(30,120,255,0.3);
+      --tp:  #f1f5f9;
+      --ts:  #94a3b8;
+      --tm:  #64748b;
+      --green:  #22c55e;
+      --yellow: #f59e0b;
+      --red:    #ef4444;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--ts);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      min-height: 100vh;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: sticky; top: 0; z-index: 50;
+      background: rgba(10,15,26,0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 0.5px solid var(--border);
+      padding: 0 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 52px;
+    }
+    .nav-left { display: flex; align-items: center; gap: 10px; }
+    .nav-logo { font-size: 15px; font-weight: 600; color: var(--tp); }
+    .nav-logo span { color: var(--accent); }
+    .status-pill {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; padding: 4px 12px; border-radius: 20px;
+      border: 0.5px solid;
+    }
+    .status-pill.safe    { color: var(--green);  background: rgba(34,197,94,0.1);  border-color: rgba(34,197,94,0.3); }
+    .status-pill.warning { color: var(--yellow); background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.3); }
+    .status-pill.offline { color: var(--tm);     background: rgba(100,116,139,0.1);border-color: rgba(100,116,139,0.3); }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .status-dot.blink { animation: blink 1.4s ease-in-out infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+    .nav-right { display: flex; align-items: center; gap: 16px; }
+    .last-update { font-size: 12px; color: var(--tm); }
+
+    /* ── LAYOUT ── */
+    .page { padding: 24px; max-width: 1200px; margin: 0 auto; }
+
+    /* ── METRIC CARDS ── */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .metric-card {
+      background: var(--bg-card);
+      border: 0.5px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      transition: border-color 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+    .metric-card.alert { border-color: rgba(239,68,68,0.5); }
+    .metric-card.alert::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: var(--red);
+    }
+    .metric-card.ok::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: var(--green);
+    }
+    .metric-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .metric-name { font-size: 11px; font-weight: 600; color: var(--tm); text-transform: uppercase; letter-spacing: 0.8px; }
+    .metric-icon { font-size: 16px; }
+    .metric-val {
+      font-size: 26px; font-weight: 700; color: var(--accent);
+      line-height: 1; margin-bottom: 4px;
+      transition: color 0.3s;
+    }
+    .metric-val.alert-val { color: var(--red); }
+    .metric-unit { font-size: 12px; color: var(--tm); }
+    .metric-range { font-size: 11px; color: var(--tm); margin-top: 8px; }
+    .metric-status { display: flex; align-items: center; gap: 4px; font-size: 11px; margin-top: 6px; }
+    .metric-status.ok     { color: var(--green); }
+    .metric-status.warn   { color: var(--yellow); }
+    .metric-status.danger { color: var(--red); }
+    .sdot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+
+    /* ── CHARTS ── */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+    .chart-card {
+      background: var(--bg-card);
+      border: 0.5px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+    }
+    .chart-title {
+      font-size: 13px; font-weight: 600; color: var(--tp);
+      margin-bottom: 14px; display: flex; align-items: center; gap: 6px;
+    }
+    .chart-wrap { height: 140px; }
+
+    /* ── HISTORY TABLE ── */
+    .table-card {
+      background: var(--bg-card);
+      border: 0.5px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .table-header {
+      padding: 14px 20px;
+      border-bottom: 0.5px solid var(--border);
+      font-size: 13px; font-weight: 600; color: var(--tp);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .reading-count { font-size: 11px; color: var(--tm); font-weight: 400; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th {
+      padding: 10px 14px; text-align: left;
+      color: var(--tm); font-weight: 600; font-size: 11px;
+      text-transform: uppercase; letter-spacing: 0.6px;
+      border-bottom: 0.5px solid var(--border);
+      background: var(--bg-dark);
+    }
+    td {
+      padding: 10px 14px;
+      border-bottom: 0.5px solid rgba(30,58,95,0.5);
+      color: var(--ts);
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(30,58,95,0.2); }
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 4px;
+      font-size: 10px; font-weight: 600; letter-spacing: 0.5px;
+    }
+    .badge-safe    { background: rgba(34,197,94,0.12); color: var(--green); }
+    .badge-warning { background: rgba(245,158,11,0.12); color: var(--yellow); }
+
+    /* ── EMPTY STATE ── */
+    .empty {
+      padding: 48px 24px; text-align: center;
+    }
+    .empty-icon { font-size: 36px; margin-bottom: 12px; opacity: 0.4; }
+    .empty h3 { font-size: 15px; color: var(--tp); margin-bottom: 6px; }
+    .empty p  { font-size: 13px; color: var(--tm); }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 600px) {
+      .page { padding: 14px; }
+      .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+      .charts-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-left">
+    <span class="nav-logo">💧 <span>AquaPredict</span> — Live Dashboard</span>
+    <div class="status-pill offline" id="conn-pill">
+      <span class="status-dot" id="conn-dot"></span>
+      <span id="conn-text">Connecting…</span>
+    </div>
+  </div>
+  <div class="nav-right">
+    <span class="last-update" id="last-update">No data yet</span>
+  </div>
+</nav>
+
+<div class="page">
+
+  <!-- METRIC CARDS -->
+  <div class="metrics-grid">
+    <div class="metric-card" id="card-ph">
+      <div class="metric-header">
+        <span class="metric-name">pH Level</span>
+        <span class="metric-icon">🧪</span>
+      </div>
+      <div class="metric-val" id="val-ph">—</div>
+      <div class="metric-unit">pH</div>
+      <div class="metric-range">Safe: 6.5 – 8.5</div>
+      <div class="metric-status" id="status-ph"><span class="sdot"></span> Waiting…</div>
+    </div>
+
+    <div class="metric-card" id="card-tds">
+      <div class="metric-header">
+        <span class="metric-name">TDS</span>
+        <span class="metric-icon">💎</span>
+      </div>
+      <div class="metric-val" id="val-tds">—</div>
+      <div class="metric-unit">ppm</div>
+      <div class="metric-range">Safe: &lt; 500 ppm</div>
+      <div class="metric-status" id="status-tds"><span class="sdot"></span> Waiting…</div>
+    </div>
+
+    <div class="metric-card" id="card-turb">
+      <div class="metric-header">
+        <span class="metric-name">Turbidity</span>
+        <span class="metric-icon">🌊</span>
+      </div>
+      <div class="metric-val" id="val-turb">—</div>
+      <div class="metric-unit">NTU</div>
+      <div class="metric-range">Safe: &lt; 4 NTU</div>
+      <div class="metric-status" id="status-turb"><span class="sdot"></span> Waiting…</div>
+    </div>
+
+    <div class="metric-card" id="card-temp">
+      <div class="metric-header">
+        <span class="metric-name">Temperature</span>
+        <span class="metric-icon">🌡️</span>
+      </div>
+      <div class="metric-val" id="val-temp">—</div>
+      <div class="metric-unit">°C</div>
+      <div class="metric-range">Safe: 10 – 30 °C</div>
+      <div class="metric-status" id="status-temp"><span class="sdot"></span> Waiting…</div>
+    </div>
+
+    <div class="metric-card" id="card-chlorine">
+      <div class="metric-header">
+        <span class="metric-name">Chlorine</span>
+        <span class="metric-icon">⚗️</span>
+      </div>
+      <div class="metric-val" id="val-chlorine">—</div>
+      <div class="metric-unit">mg/L</div>
+      <div class="metric-range">Safe: 0.2 – 4.0 mg/L</div>
+      <div class="metric-status" id="status-chlorine"><span class="sdot"></span> Waiting…</div>
+    </div>
+
+    <div class="metric-card" id="card-pressure">
+      <div class="metric-header">
+        <span class="metric-name">Pressure</span>
+        <span class="metric-icon">🔧</span>
+      </div>
+      <div class="metric-val" id="val-pressure">—</div>
+      <div class="metric-unit">MPa</div>
+      <div class="metric-range">Normal: 0.2 – 0.8 MPa</div>
+      <div class="metric-status" id="status-pressure"><span class="sdot"></span> Waiting…</div>
+    </div>
+  </div>
+
+  <!-- CHARTS -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-title">🧪 pH over time</div>
+      <div class="chart-wrap"><canvas id="chart-ph"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">💎 TDS over time</div>
+      <div class="chart-wrap"><canvas id="chart-tds"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">🌡️ Temperature over time</div>
+      <div class="chart-wrap"><canvas id="chart-temp"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">🌊 Turbidity over time</div>
+      <div class="chart-wrap"><canvas id="chart-turb"></canvas></div>
+    </div>
+  </div>
+
+  <!-- HISTORY TABLE -->
+  <div class="table-card">
+    <div class="table-header">
+      Recent readings
+      <span class="reading-count" id="reading-count">0 readings</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>pH</th>
+            <th>TDS (ppm)</th>
+            <th>Turbidity (NTU)</th>
+            <th>Temp (°C)</th>
+            <th>Chlorine (mg/L)</th>
+            <th>Pressure (MPa)</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="table-body">
+          <tr>
+            <td colspan="8">
+              <div class="empty">
+                <div class="empty-icon">📡</div>
+                <h3>Waiting for ESP32 data</h3>
+                <p>Make sure your ESP32 is powered on and connected to the MQTT broker</p>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // ── Thresholds ────────────────────────────────────────────────────────────
+  const THRESHOLDS = {
+    pH:       { min: 6.5,  max: 8.5  },
+    tds:      { min: 0,    max: 500  },
+    turbidity:{ min: 0,    max: 4.0  },
+    temperature:{ min: 10, max: 30   },
+    chlorine: { min: 0.2,  max: 4.0  },
+    pressure: { min: 0.2,  max: 0.8  },
+  };
+
+  function isOk(key, val) {
+    const t = THRESHOLDS[key];
+    return val >= t.min && val <= t.max;
+  }
+
+  // ── Chart setup ───────────────────────────────────────────────────────────
+  const MAX_POINTS = 30;
+  const chartOpts = (label, color, minY, maxY) => ({
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        label,
+        data: [],
+        borderColor: color,
+        backgroundColor: color + '18',
+        borderWidth: 2,
+        pointRadius: 2,
+        tension: 0.4,
+        fill: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 300 },
+      plugins: { legend: { display: false } },
+      scales: {
+        x: {
+          ticks: { color: '#64748b', font: { size: 10 }, maxTicksLimit: 6 },
+          grid: { color: 'rgba(30,58,95,0.4)' }
+        },
+        y: {
+          min: minY, max: maxY,
+          ticks: { color: '#64748b', font: { size: 10 } },
+          grid: { color: 'rgba(30,58,95,0.4)' }
+        }
+      }
+    }
+  });
+
+  const charts = {
+    ph:   new Chart(document.getElementById('chart-ph'),   chartOpts('pH',          '#3b82f6', 4, 10)),
+    tds:  new Chart(document.getElementById('chart-tds'),  chartOpts('TDS (ppm)',    '#8b5cf6', 0, 600)),
+    temp: new Chart(document.getElementById('chart-temp'), chartOpts('Temp (°C)',    '#f59e0b', 0, 40)),
+    turb: new Chart(document.getElementById('chart-turb'), chartOpts('Turbidity',   '#06b6d4', 0, 10)),
+  };
+
+  function pushChart(chart, label, value) {
+    chart.data.labels.push(label);
+    chart.data.datasets[0].data.push(value);
+    if (chart.data.labels.length > MAX_POINTS) {
+      chart.data.labels.shift();
+      chart.data.datasets[0].data.shift();
+    }
+    chart.update('none');
+  }
+
+  // ── Update a metric card ──────────────────────────────────────────────────
+  function updateCard(key, cardId, valId, statusId, value, unit) {
+    const ok = isOk(key, value);
+    const card = document.getElementById(cardId);
+    const valEl = document.getElementById(valId);
+    const stEl  = document.getElementById(statusId);
+
+    card.className = 'metric-card ' + (ok ? 'ok' : 'alert');
+    valEl.className = 'metric-val ' + (ok ? '' : 'alert-val');
+    valEl.textContent = value;
+
+    stEl.className = 'metric-status ' + (ok ? 'ok' : 'danger');
+    stEl.innerHTML = `<span class="sdot"></span> ${ok ? 'Normal' : 'Out of range!'}`;
+  }
+
+  // ── Render a reading ──────────────────────────────────────────────────────
+  function renderReading(d) {
+    const t = new Date(d.received_at || Date.now());
+    const timeStr = t.toLocaleTimeString();
+
+    updateCard('pH',          'card-ph',       'val-ph',       'status-ph',       d.pH,          'pH');
+    updateCard('tds',         'card-tds',      'val-tds',      'status-tds',      d.tds,         'ppm');
+    updateCard('turbidity',   'card-turb',     'val-turb',     'status-turb',     d.turbidity,   'NTU');
+    updateCard('temperature', 'card-temp',     'val-temp',     'status-temp',     d.temperature, '°C');
+    updateCard('chlorine',    'card-chlorine', 'val-chlorine', 'status-chlorine', d.chlorine,    'mg/L');
+    updateCard('pressure',    'card-pressure', 'val-pressure', 'status-pressure', d.pressure,    'MPa');
+
+    pushChart(charts.ph,   timeStr, d.pH);
+    pushChart(charts.tds,  timeStr, d.tds);
+    pushChart(charts.temp, timeStr, d.temperature);
+    pushChart(charts.turb, timeStr, d.turbidity);
+
+    document.getElementById('last-update').textContent = 'Last update: ' + timeStr;
+  }
+
+  // ── Render history table ──────────────────────────────────────────────────
+  let allReadings = [];
+
+  function renderTable() {
+    const tbody = document.getElementById('table-body');
+    if (allReadings.length === 0) return;
+
+    const rows = [...allReadings].reverse().slice(0, 20).map(d => {
+      const t = new Date(d.received_at || Date.now()).toLocaleTimeString();
+      const safe = d.status === 'SAFE';
+      return `<tr>
+        <td>${t}</td>
+        <td>${d.pH}</td>
+        <td>${d.tds}</td>
+        <td>${d.turbidity}</td>
+        <td>${d.temperature}</td>
+        <td>${d.chlorine}</td>
+        <td>${d.pressure}</td>
+        <td><span class="badge ${safe ? 'badge-safe' : 'badge-warning'}">${d.status}</span></td>
+      </tr>`;
+    }).join('');
+
+    tbody.innerHTML = rows;
+    document.getElementById('reading-count').textContent = allReadings.length + ' readings';
+  }
+
+  // ── WebSocket connection ──────────────────────────────────────────────────
+  const pill  = document.getElementById('conn-pill');
+  const dot   = document.getElementById('conn-dot');
+  const label = document.getElementById('conn-text');
+
+  function setConnected(on) {
+    pill.className  = 'status-pill ' + (on ? 'safe' : 'offline');
+    dot.className   = 'status-dot ' + (on ? 'blink' : '');
+    label.textContent = on ? 'Live' : 'Disconnected';
+  }
+
+  function connect() {
+    const ws = new WebSocket('ws://' + location.host);
+
+    ws.onopen  = () => setConnected(true);
+    ws.onclose = () => { setConnected(false); setTimeout(connect, 3000); };
+    ws.onerror = () => ws.close();
+
+    ws.onmessage = (e) => {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'history') {
+        allReadings = msg.data;
+        if (allReadings.length > 0) {
+          allReadings.forEach(d => {
+            const t = new Date(d.received_at || Date.now()).toLocaleTimeString();
+            pushChart(charts.ph,   t, d.pH);
+            pushChart(charts.tds,  t, d.tds);
+            pushChart(charts.temp, t, d.temperature);
+            pushChart(charts.turb, t, d.turbidity);
+          });
+          renderReading(allReadings[allReadings.length - 1]);
+          renderTable();
+        }
+      } else if (msg.type === 'reading') {
+        allReadings.push(msg.data);
+        renderReading(msg.data);
+        renderTable();
+      }
+    };
+  }
+
+  connect();
+</script>
+</body>
+</html>
